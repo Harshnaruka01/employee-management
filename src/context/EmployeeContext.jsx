@@ -18,25 +18,9 @@ const EmployeeContext = createContext()
 export function EmployeeProvider({ children }) {
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
+  const [firestoreAvailable, setFirestoreAvailable] = useState(false)
 
-  useEffect(() => {
-    if (isFirebaseConfigured && db) {
-      const employeesQuery = query(collection(db, 'employees'), orderBy('id'))
-      const unsubscribe = onSnapshot(
-        employeesQuery,
-        (snapshot) => {
-          const records = snapshot.docs.map((doc) => doc.data())
-          setEmployees(records)
-          setLoading(false)
-        },
-        (error) => {
-          console.error('Error loading employees from Firestore:', error)
-          setLoading(false)
-        }
-      )
-      return unsubscribe
-    }
-
+  const loadLocalEmployees = () => {
     const savedEmployees = localStorage.getItem('employees')
     if (savedEmployees) {
       try {
@@ -63,22 +47,65 @@ export function EmployeeProvider({ children }) {
       ])
     }
     setLoading(false)
+  }
+
+  useEffect(() => {
+    let unsubscribe = null
+
+    if (isFirebaseConfigured && db) {
+      const employeesRef = collection(db, 'employees')
+      getDocs(employeesRef)
+        .then((snapshot) => {
+          const records = snapshot.docs.map((doc) => doc.data())
+          setEmployees(records)
+          setFirestoreAvailable(true)
+          setLoading(false)
+
+          unsubscribe = onSnapshot(
+            query(employeesRef, orderBy('id')),
+            (liveSnapshot) => {
+              const liveRecords = liveSnapshot.docs.map((doc) => doc.data())
+              setEmployees(liveRecords)
+            },
+            (error) => {
+              console.error('Error listening to Firestore employees:', error)
+              setFirestoreAvailable(false)
+              loadLocalEmployees()
+            }
+          )
+        })
+        .catch((error) => {
+          console.error('Error loading employees from Firestore:', error)
+          setFirestoreAvailable(false)
+          loadLocalEmployees()
+        })
+
+      return () => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe()
+        }
+      }
+    }
+
+    loadLocalEmployees()
   }, [])
 
   useEffect(() => {
-    if (!loading && !isFirebaseConfigured) {
+    if (!loading && !firestoreAvailable) {
       localStorage.setItem('employees', JSON.stringify(employees))
     }
-  }, [employees, loading])
+  }, [employees, loading, firestoreAvailable])
 
   const addEmployee = async (employee) => {
     const { name, contact } = employee
     const newEmployee = { name, contact, id: Date.now() }
-    if (isFirebaseConfigured && db) {
+    if (firestoreAvailable && db) {
       try {
         await addDoc(collection(db, 'employees'), newEmployee)
       } catch (error) {
         console.error('Error adding employee to Firestore:', error)
+        setFirestoreAvailable(false)
+        setEmployees((prev) => [...prev, newEmployee])
       }
     } else {
       setEmployees((prev) => [...prev, newEmployee])
@@ -86,7 +113,7 @@ export function EmployeeProvider({ children }) {
   }
 
   const updateEmployee = async (id, updatedEmployee) => {
-    if (isFirebaseConfigured && db) {
+    if (firestoreAvailable && db) {
       try {
         const employeesQuery = query(collection(db, 'employees'), where('id', '==', id))
         const snapshot = await getDocs(employeesQuery)
@@ -97,6 +124,9 @@ export function EmployeeProvider({ children }) {
         await Promise.all(updatePromises)
       } catch (error) {
         console.error('Error updating employee in Firestore:', error)
+        setFirestoreAvailable(false)
+        const { name, contact } = updatedEmployee
+        setEmployees((prev) => prev.map((emp) => (emp.id === id ? { ...emp, name, contact } : emp)))
       }
     } else {
       const { name, contact } = updatedEmployee
@@ -105,7 +135,7 @@ export function EmployeeProvider({ children }) {
   }
 
   const deleteEmployee = async (id) => {
-    if (isFirebaseConfigured && db) {
+    if (firestoreAvailable && db) {
       try {
         const employeesQuery = query(collection(db, 'employees'), where('id', '==', id))
         const snapshot = await getDocs(employeesQuery)
@@ -116,6 +146,8 @@ export function EmployeeProvider({ children }) {
         await Promise.all(deletePromises)
       } catch (error) {
         console.error('Error deleting employee from Firestore:', error)
+        setFirestoreAvailable(false)
+        setEmployees((prev) => prev.filter((emp) => emp.id !== id))
       }
     } else {
       setEmployees((prev) => prev.filter((emp) => emp.id !== id))
