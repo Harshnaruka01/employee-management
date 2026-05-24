@@ -22,7 +22,6 @@ export function SalaryRecordsPage() {
     overtimeHours: '', 
     overtimeRate: '', 
     overtime: '', 
-    deductions: '', 
     month: '', 
     year: ''
   })
@@ -41,7 +40,6 @@ export function SalaryRecordsPage() {
         overtimeHours: record.overtimeHours?.toString() || '',
         overtimeRate: record.overtimeRate?.toString() || '25',
         overtime: record.overtime.toString(),
-        deductions: record.deductions.toString(),
         month: record.month,
         year: record.year.toString()
       })
@@ -52,7 +50,6 @@ export function SalaryRecordsPage() {
         overtimeHours: '', 
         overtimeRate: '25', 
         overtime: '', 
-        deductions: '', 
         month: new Date().toLocaleString('default', { month: 'long' }), 
         year: new Date().getFullYear().toString() 
       })
@@ -93,16 +90,13 @@ export function SalaryRecordsPage() {
     const overtimeRate = parseFloat(form.overtimeRate) || 25
     const calculatedOvertime = overtimeHours * overtimeRate
     const baseSalary = parseFloat(form.baseSalary) || 0
-    const deductions = parseFloat(form.deductions) || 0
-    
     const recordData = {
       ...form,
       baseSalary,
       overtimeHours,
       overtimeRate,
       overtime: calculatedOvertime,
-      deductions,
-      totalSalary: baseSalary + calculatedOvertime - deductions,
+      totalSalary: baseSalary + calculatedOvertime,
       employeeName: employee.name
     }
 
@@ -242,7 +236,6 @@ export function SalaryRecordsPage() {
                   <>
                     Base: ${record.baseSalary.toLocaleString()} | 
                     Overtime: {record.overtimeHours || 0}h × ${record.overtimeRate || 25}/h = ${record.overtime.toLocaleString()} | 
-                    Deductions: ${record.deductions.toLocaleString()} | 
                     <strong> Total: ${record.totalSalary.toLocaleString()}</strong>
                   </>
                 } 
@@ -317,15 +310,7 @@ export function SalaryRecordsPage() {
             onChange={handleChange}
             helperText={`Overtime pay: ${(parseFloat(form.overtimeHours) || 0) * (parseFloat(form.overtimeRate) || 25)}`}
           />
-          <TextField
-            margin="dense"
-            name="deductions"
-            label="Deductions"
-            type="number"
-            fullWidth
-            value={form.deductions}
-            onChange={handleChange}
-          />
+          
           <FormControl fullWidth margin="dense">
             <InputLabel id="month-select-label">Month</InputLabel>
             <Select

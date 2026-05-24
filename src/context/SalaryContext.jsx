@@ -9,11 +9,46 @@ export function SalaryProvider({ children }) {
   useEffect(() => {
     const savedRecords = localStorage.getItem('salaryRecords')
     if (savedRecords) {
-      setSalaryRecords(JSON.parse(savedRecords))
+      try {
+        const parsed = JSON.parse(savedRecords)
+        if (Array.isArray(parsed)) {
+          // Normalize records to remove any legacy `deductions` and recompute totalSalary
+          const normalized = parsed.map(r => {
+            const baseSalary = parseFloat(r.baseSalary) || 0
+            const overtime = typeof r.overtime === 'number' ? r.overtime : (parseFloat(r.overtime) || 0)
+            const totalSalary = baseSalary + overtime
+            return {
+              id: r.id,
+              employeeId: r.employeeId,
+              employeeName: r.employeeName,
+              baseSalary,
+              overtimeHours: r.overtimeHours || 0,
+              overtimeRate: r.overtimeRate || 25,
+              overtime,
+              month: r.month,
+              year: r.year,
+              totalSalary
+            }
+          })
+          setSalaryRecords(normalized)
+        } else {
+          // Fallback default data
+          setSalaryRecords([
+            { id: 1, employeeId: 1, employeeName: 'John Doe', baseSalary: 5000, overtimeHours: 20, overtimeRate: 25, overtime: 500, month: 'January', year: '2024', totalSalary: 5500 },
+            { id: 2, employeeId: 2, employeeName: 'Jane Smith', baseSalary: 6000, overtimeHours: 12, overtimeRate: 25, overtime: 300, month: 'January', year: '2024', totalSalary: 6300 },
+          ])
+        }
+      } catch (e) {
+        console.error('Error parsing salaryRecords:', e)
+        setSalaryRecords([
+          { id: 1, employeeId: 1, employeeName: 'John Doe', baseSalary: 5000, overtimeHours: 20, overtimeRate: 25, overtime: 500, month: 'January', year: '2024', totalSalary: 5500 },
+          { id: 2, employeeId: 2, employeeName: 'Jane Smith', baseSalary: 6000, overtimeHours: 12, overtimeRate: 25, overtime: 300, month: 'January', year: '2024', totalSalary: 6300 },
+        ])
+      }
     } else {
       setSalaryRecords([
-        { id: 1, employeeId: 1, employeeName: 'John Doe', baseSalary: 5000, overtimeHours: 20, overtimeRate: 25, overtime: 500, deductions: 200, month: 'January', year: '2024', totalSalary: 5300 },
-        { id: 2, employeeId: 2, employeeName: 'Jane Smith', baseSalary: 6000, overtimeHours: 12, overtimeRate: 25, overtime: 300, deductions: 150, month: 'January', year: '2024', totalSalary: 6150 },
+        { id: 1, employeeId: 1, employeeName: 'John Doe', baseSalary: 5000, overtimeHours: 20, overtimeRate: 25, overtime: 500, month: 'January', year: '2024', totalSalary: 5500 },
+        { id: 2, employeeId: 2, employeeName: 'Jane Smith', baseSalary: 6000, overtimeHours: 12, overtimeRate: 25, overtime: 300, month: 'January', year: '2024', totalSalary: 6300 },
       ])
     }
     setLoading(false)
