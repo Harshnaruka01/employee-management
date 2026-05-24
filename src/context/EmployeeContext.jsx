@@ -9,7 +9,8 @@ import {
   updateDoc,
   deleteDoc,
   where,
-  getDocs
+  getDocs,
+  doc
 } from 'firebase/firestore'
 
 const EmployeeContext = createContext()
@@ -89,10 +90,11 @@ export function EmployeeProvider({ children }) {
       try {
         const employeesQuery = query(collection(db, 'employees'), where('id', '==', id))
         const snapshot = await getDocs(employeesQuery)
-        snapshot.forEach((docSnapshot) => {
+        const updatePromises = snapshot.docs.map((docSnapshot) => {
           const docRef = doc(db, 'employees', docSnapshot.id)
-          updateDoc(docRef, { ...updatedEmployee, id })
+          return updateDoc(docRef, { ...updatedEmployee, id })
         })
+        await Promise.all(updatePromises)
       } catch (error) {
         console.error('Error updating employee in Firestore:', error)
       }
@@ -107,9 +109,11 @@ export function EmployeeProvider({ children }) {
       try {
         const employeesQuery = query(collection(db, 'employees'), where('id', '==', id))
         const snapshot = await getDocs(employeesQuery)
-        snapshot.forEach((docSnapshot) => {
-          deleteDoc(doc(db, 'employees', docSnapshot.id))
+        const deletePromises = snapshot.docs.map((docSnapshot) => {
+          const docRef = doc(db, 'employees', docSnapshot.id)
+          return deleteDoc(docRef)
         })
+        await Promise.all(deletePromises)
       } catch (error) {
         console.error('Error deleting employee from Firestore:', error)
       }
