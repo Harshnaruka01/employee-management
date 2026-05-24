@@ -1,4 +1,16 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { db, isFirebaseConfigured } from '../firebase/firebase.js'
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  where,
+  getDocs
+} from 'firebase/firestore'
 
 const EmployeeContext = createContext()
 
@@ -7,14 +19,30 @@ export function EmployeeProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (isFirebaseConfigured && db) {
+      const employeesQuery = query(collection(db, 'employees'), orderBy('id'))
+      const unsubscribe = onSnapshot(
+        employeesQuery,
+        (snapshot) => {
+          const records = snapshot.docs.map((doc) => doc.data())
+          setEmployees(records)
+          setLoading(false)
+        },
+        (error) => {
+          console.error('Error loading employees from Firestore:', error)
+          setLoading(false)
+        }
+      )
+      return unsubscribe
+    }
+
     const savedEmployees = localStorage.getItem('employees')
     if (savedEmployees) {
       try {
         const parsedEmployees = JSON.parse(savedEmployees)
         if (Array.isArray(parsedEmployees) && parsedEmployees.length > 0) {
-          setEmployees(parsedEmployees.map(({id, name, contact}) => ({id, name, contact})) )
+          setEmployees(parsedEmployees.map(({ id, name, contact }) => ({ id, name, contact })))
         } else {
-          // Fallback if data is invalid
           setEmployees([
             { id: 1, name: 'John Doe', contact: '1234567890' },
             { id: 2, name: 'Jane Smith', contact: '9876543210' },
@@ -22,7 +50,6 @@ export function EmployeeProvider({ children }) {
         }
       } catch (error) {
         console.error('Error parsing employees from localStorage:', error)
-        // Fallback on error
         setEmployees([
           { id: 1, name: 'John Doe', contact: '1234567890' },
           { id: 2, name: 'Jane Smith', contact: '9876543210' },
@@ -38,23 +65,57 @@ export function EmployeeProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !isFirebaseConfigured) {
       localStorage.setItem('employees', JSON.stringify(employees))
     }
   }, [employees, loading])
 
-  const addEmployee = (employee) => {
+  const addEmployee = async (employee) => {
     const { name, contact } = employee
-    setEmployees(prev => [...prev, { name, contact, id: Date.now() }])
+    const newEmployee = { name, contact, id: Date.now() }
+    if (isFirebaseConfigured && db) {
+      try {
+        await addDoc(collection(db, 'employees'), newEmployee)
+      } catch (error) {
+        console.error('Error adding employee to Firestore:', error)
+      }
+    } else {
+      setEmployees((prev) => [...prev, newEmployee])
+    }
   }
 
-  const updateEmployee = (id, updatedEmployee) => {
-    const { name, contact } = updatedEmployee
-    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, name, contact } : emp))
+  const updateEmployee = async (id, updatedEmployee) => {
+    if (isFirebaseConfigured && db) {
+      try {
+        const employeesQuery = query(collection(db, 'employees'), where('id', '==', id))
+        const snapshot = await getDocs(employeesQuery)
+        snapshot.forEach((docSnapshot) => {
+          const docRef = doc(db, 'employees', docSnapshot.id)
+          updateDoc(docRef, { ...updatedEmployee, id })
+        })
+      } catch (error) {
+        console.error('Error updating employee in Firestore:', error)
+      }
+    } else {
+      const { name, contact } = updatedEmployee
+      setEmployees((prev) => prev.map((emp) => (emp.id === id ? { ...emp, name, contact } : emp)))
+    }
   }
 
-  const deleteEmployee = (id) => {
-    setEmployees(prev => prev.filter(emp => emp.id !== id))
+  const deleteEmployee = async (id) => {
+    if (isFirebaseConfigured && db) {
+      try {
+        const employeesQuery = query(collection(db, 'employees'), where('id', '==', id))
+        const snapshot = await getDocs(employeesQuery)
+        snapshot.forEach((docSnapshot) => {
+          deleteDoc(doc(db, 'employees', docSnapshot.id))
+        })
+      } catch (error) {
+        console.error('Error deleting employee from Firestore:', error)
+      }
+    } else {
+      setEmployees((prev) => prev.filter((emp) => emp.id !== id))
+    }
   }
 
   const getTotalEmployees = () => employees.length
